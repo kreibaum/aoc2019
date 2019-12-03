@@ -22,12 +22,14 @@ struct HorizontalWire
     x1::Int
     x2::Int
     y::Int
+    offset::Int
 end
 
 struct VerticalWire
     x::Int
     y1::Int
     y2::Int
+    offset::Int
 end
 
 @enum Direction begin
@@ -51,25 +53,27 @@ function createWires(directions)
     wires = Vector{Any}(undef, length(directions))
     x = 0
     y = 0
+    offset = 0
     for i in 1:length(directions)
         (d, l) = directions[i]
         if d == Up
             y1 = y
             y += l
-            wires[i] = VerticalWire(x, y1, y)
+            wires[i] = VerticalWire(x, y1, y, offset)
         elseif d == Down
             y1 = y
             y -= l
-            wires[i] = VerticalWire(x, y1, y)
+            wires[i] = VerticalWire(x, y1, y, offset)
         elseif d == Right
             x1 = x
             x += l
-            wires[i] = HorizontalWire(x1, x, y)
+            wires[i] = HorizontalWire(x1, x, y, offset)
         elseif d == Left
             x1 = x
             x -= l
-            wires[i] = HorizontalWire(x1, x, y)
+            wires[i] = HorizontalWire(x1, x, y, offset)
         end
+        offset += l
     end
     wires
 end
@@ -80,7 +84,10 @@ intersect(w1::VerticalWire, w2::HorizontalWire) = intersect(w2, w1)
 function intersect(w1::HorizontalWire, w2::VerticalWire)
     if w1.x1 < w2.x < w1.x2 || w1.x1 > w2.x > w1.x2
         if w2.y1 < w1.y < w2.y2 || w2.y1 > w1.y > w2.y2 
-            return (w2.x, w1.y)
+            signalTime = w1.offset + w2.offset
+            signalTime += abs(w1.x1 - w2.x)
+            signalTime += abs(w2.y1 - w1.y)
+            return (w2.x, w1.y, signalTime)
         end
     end
     Nothing
@@ -97,9 +104,12 @@ function intersections(wires1, wires2)
     result
 end
 
-manhattan((x, y)) = abs(x) + abs(y)
+intersection_offset((_, _, offset)) = offset
+
+manhattan((x, y, _)) = abs(x) + abs(y)
 
 # Puzzle
 wires = createWires.(parseDirectionString.(readlines(open("input-03"))))
 intersections_puzzle = intersections(wires[1], wires[2])
 @assert 352 == @show minimum(manhattan.(intersections_puzzle))
+@assert 43848 == @show minimum(intersection_offset.(intersections_puzzle))
