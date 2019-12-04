@@ -183,3 +183,57 @@ end
 intersection_offset((_, _, offset)) = offset
 
 manhattan((x, y, _)) = abs(x) + abs(y)
+
+
+
+################################################################################
+# Password Check ###############################################################
+################################################################################
+
+
+"""However, they do remember a few key facts about the password:
+
+* It is a six-digit number.
+* The value is within the range given in your puzzle input.
+* Two adjacent digits are the same (like 22 in 122345).
+* Going from left to right, the digits never decrease; they only ever increase or stay the same (like 111123 or 135679).
+"""
+function check_password(number)
+    dgts = digits(number)[end:-1:1]
+    pairFound = false
+    for i in 2:6
+        pairFound = pairFound || dgts[i - 1] == dgts[i]
+        if dgts[i] < dgts[i - 1]
+            return false
+        end
+    end
+    pairFound
+end
+
+"""An Elf just remembered one more important detail:
+the two adjacent matching digits are not part of a larger group of matching digits.
+"""
+function check_password_stronger(number)
+    dgts = digits(number)[end:-1:1]
+    pairFound = false
+    seqCount = 1
+    for i in 2:6
+        if dgts[i - 1] == dgts[i]
+            seqCount += 1
+        else
+            if seqCount == 2
+                pairFound = true
+            end
+            seqCount = 1
+        end
+        if dgts[i] < dgts[i - 1]
+            return false
+        end
+    end
+
+    if seqCount == 2
+        pairFound = true
+    end
+
+    pairFound
+end

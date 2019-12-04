@@ -24,3 +24,6 @@ intersections_puzzle = intersections(wires[1], wires[2])
 @assert 43848 == @show minimum(intersection_offset.(intersections_puzzle))
 
 println("\nSolutions for Day 4")
+
+@assert 1019 == @show length(filter(check_password, 248345:746315))
+@assert 660 == @show length(filter(check_password_stronger, 248345:746315))
