@@ -29,10 +29,10 @@ end
 
 
 mutable struct ElfVM
-    memory::Vector
+    memory::Vector{Int}
     instructionPointer::Int
-    stdin::Vector
-    stdout::Vector
+    stdin::Vector{Int}
+    stdout::Vector{Int}
 end
 
 function ElfVM(memory)
@@ -61,7 +61,7 @@ parse_instruction(with_parameter_modes::Int) =  (with_parameter_modes % 100, dig
 """Reads a parameter of the instruction, given a relative offset.
 Can differentiate between different read modes. (position/immediate)
 Missing read modes are assumed to be position mode."""
-function read_param(vm::ElfVM, i::Int, parameter_modes::Vector{Int})
+function read_param(vm::ElfVM, i::Int, parameter_modes::Vector{Int})::Int
     mode = i <= length(parameter_modes) ? parameter_modes[i] : 0 
     value = get(vm, vm.instructionPointer + i)
     if mode == 0
@@ -83,8 +83,8 @@ end
 """Executes one instruction on the ElfVM and returns whether it is still active.
 """
 function tick!(vm::ElfVM)::Bool
-    (instr, parameter_modes) = parse_instruction(current_instruction(vm))
-    if instr == 1
+    (opcode, parameter_modes) = parse_instruction(current_instruction(vm))
+    if opcode == 1
         # Addition
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -92,7 +92,7 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif instr == 2
+    elseif opcode == 2
         # Multiplication
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -100,19 +100,55 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif instr == 3
+    elseif opcode == 3
         # Read from stdin
         a = popfirst!(vm.stdin)
         write_param!(vm, 1, a)
         step!(vm, 2)
         true
-    elseif instr == 4
+    elseif opcode == 4
         # Write to stdout
         a = read_param(vm, 1, parameter_modes)
         push!(vm.stdout, a)
         step!(vm, 2)
         true
-    elseif instr == 99
+    elseif opcode == 5
+        # jump-if-true
+        a = read_param(vm, 1, parameter_modes)
+        if a != 0
+            b = read_param(vm, 2, parameter_modes)
+            vm.instructionPointer = b
+        else
+            step!(vm, 3)
+        end
+        true
+    elseif opcode == 6
+        # jump-if-false
+        a = read_param(vm, 1, parameter_modes)
+        if a == 0
+            b = read_param(vm, 2, parameter_modes)
+            vm.instructionPointer = b
+        else
+            step!(vm, 3)
+        end
+        true
+    elseif opcode == 7
+        # less than
+        a = read_param(vm, 1, parameter_modes)
+        b = read_param(vm, 2, parameter_modes)
+        c = a < b ? 1 : 0
+        write_param!(vm, 3, c)
+        step!(vm, 4)
+        true
+    elseif opcode == 8
+        # equals
+        a = read_param(vm, 1, parameter_modes)
+        b = read_param(vm, 2, parameter_modes)
+        c = a == b ? 1 : 0
+        write_param!(vm, 3, c)
+        step!(vm, 4)
+        true
+    elseif opcode == 99
         false
     end
 end

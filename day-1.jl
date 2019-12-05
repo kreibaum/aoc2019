@@ -29,8 +29,14 @@ println("\nSolutions for Day 4")
 @assert 660 == @show length(filter(check_password_stronger, 248345:746315))
 
 println("\nSolutions for Day 5")
-inputDay2 = parse.(Int, split(read("input-05", String), ","))
-vm5 = ElfVM(inputDay2)
+inputDay5 = parse.(Int, split(read("input-05", String), ","))
+vm5 = ElfVM(copy(inputDay5))
 push!(vm5.stdin, 1)
 run(vm5)
 @assert [0, 0, 0, 0, 0, 0, 0, 0, 0, 13818007] == @show vm5.stdout
+
+inputDay5 = parse.(Int, split(read("input-05", String), ","))
+vm5_b = ElfVM(copy(inputDay5))
+push!(vm5_b.stdin, 5)
+run(vm5_b)
+@assert 3176266 == @show vm5_b.stdout[1]
