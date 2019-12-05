@@ -29,16 +29,18 @@ end
 
 
 mutable struct ElfVM
-    memory
-    instructionPointer
+    memory::Vector
+    instructionPointer::Int
+    stdin::Vector
+    stdout::Vector
 end
 
 function ElfVM(memory)
-    ElfVM(memory, 0)
+    ElfVM(memory, 0, [], [])
 end
 
 function Base.copy(vm::ElfVM)::ElfVM
-    ElfVM(copy(vm.memory), vm.instructionPointer)
+    ElfVM(copy(vm.memory), vm.instructionPointer, copy(vm.stdin), copy(vm.stdout))
 end
 
 function set!(vm::ElfVM, i, v)
@@ -53,19 +55,62 @@ params3(vm) = (get(vm, vm.instructionPointer + 1),
     get(vm, vm.instructionPointer + 2), 
     get(vm, vm.instructionPointer + 3))
 
+"""Decodes an instruction into a tuple (opcode, parameter_modes)"""
+parse_instruction(with_parameter_modes::Int) =  (with_parameter_modes % 100, digits(with_parameter_modes ÷ 100))
+
+"""Reads a parameter of the instruction, given a relative offset.
+Can differentiate between different read modes. (position/immediate)
+Missing read modes are assumed to be position mode."""
+function read_param(vm::ElfVM, i::Int, parameter_modes::Vector{Int})
+    mode = i <= length(parameter_modes) ? parameter_modes[i] : 0 
+    value = get(vm, vm.instructionPointer + i)
+    if mode == 0
+        # position mode
+        return get(vm, value)
+    elseif mode == 1
+        # immediate mode
+        return value
+    end
+    end
+
+"""Writes the value to the register given as the i-th parameter of
+the current operation."""
+function write_param!(vm::ElfVM, i::Int, value)
+    target = get(vm, vm.instructionPointer + i)
+    set!(vm, target, value)
+end
+
 """Executes one instruction on the ElfVM and returns whether it is still active.
 """
-function tick!(vm)::Bool
-    instr = current_instruction(vm)
+function tick!(vm::ElfVM)::Bool
+    (instr, parameter_modes) = parse_instruction(current_instruction(vm))
     if instr == 1
-        (a, b, c) = params3(vm)
-        set!(vm, c, get(vm, a) + get(vm, b))
+        # Addition
+        a = read_param(vm, 1, parameter_modes)
+        b = read_param(vm, 2, parameter_modes)
+        c = a + b
+        write_param!(vm, 3, c)
         step!(vm, 4)
         true
     elseif instr == 2
-        (a, b, c) = params3(vm)
-        set!(vm, c, get(vm, a) * get(vm, b))
+        # Multiplication
+        a = read_param(vm, 1, parameter_modes)
+        b = read_param(vm, 2, parameter_modes)
+        c = a * b
+        write_param!(vm, 3, c)
         step!(vm, 4)
+        true
+    elseif instr == 3
+        # Read from stdin
+        a = popfirst!(vm.stdin)
+        write_param!(vm, 1, a)
+        step!(vm, 2)
+        true
+    elseif instr == 4
+        # Write to stdout
+        a = read_param(vm, 1, parameter_modes)
+        push!(vm.stdout, a)
+        step!(vm, 2)
         true
     elseif instr == 99
         false
@@ -76,10 +121,14 @@ function step!(vm, n)
     vm.instructionPointer += n
 end
 
+function run(vm::ElfVM)
+    while tick!(vm) end
+end
+
 function runWithArguments(vm, noun, verb)
     set!(vm, 1, noun)
     set!(vm, 2, verb)
-    while tick!(vm) end
+    run(vm)
     get(vm, 0)
 end
 
@@ -156,7 +205,7 @@ function createWires(directions)
         offset += l
     end
     wires
-end
+    end
 
 intersect(w1::HorizontalWire, w2::HorizontalWire) = Nothing
 intersect(w1::VerticalWire, w2::VerticalWire) = Nothing
@@ -233,7 +282,7 @@ function check_password_stronger(number)
         if dgts[i] < dgts[i - 1]
             return false
         end
-    end
+        end
 
     if seqCount == 2
         pairFound = true
