@@ -43,6 +43,18 @@ function Base.copy(vm::ElfVM)::ElfVM
     ElfVM(copy(vm.memory), vm.instructionPointer, copy(vm.stdin), copy(vm.stdout))
 end
 
+@enum Opcode begin
+    Addition = 1
+    Multiplication = 2
+    ReadStdin = 3
+    WriteStdout = 4
+    JumpIfTrue = 5
+    JumpIfFalse = 6
+    LessThan = 7
+    Equals = 8
+    Halt = 99
+end
+
 function set!(vm::ElfVM, i, v)
     vm.memory[i + 1] = v
 end
@@ -56,7 +68,7 @@ params3(vm) = (get(vm, vm.instructionPointer + 1),
     get(vm, vm.instructionPointer + 3))
 
 """Decodes an instruction into a tuple (opcode, parameter_modes)"""
-parse_instruction(with_parameter_modes::Int) =  (with_parameter_modes % 100, digits(with_parameter_modes ÷ 100))
+parse_instruction(with_parameter_modes::Int) = (Opcode(with_parameter_modes % 100), digits(with_parameter_modes ÷ 100))
 
 """Reads a parameter of the instruction, given a relative offset.
 Can differentiate between different read modes. (position/immediate)
@@ -84,7 +96,7 @@ end
 """
 function tick!(vm::ElfVM)::Bool
     (opcode, parameter_modes) = parse_instruction(current_instruction(vm))
-    if opcode == 1
+    if opcode == Addition
         # Addition
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -92,7 +104,7 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif opcode == 2
+    elseif opcode == Multiplication
         # Multiplication
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -100,19 +112,19 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif opcode == 3
+    elseif opcode == ReadStdin
         # Read from stdin
         a = popfirst!(vm.stdin)
         write_param!(vm, 1, a)
         step!(vm, 2)
         true
-    elseif opcode == 4
+    elseif opcode == WriteStdout
         # Write to stdout
         a = read_param(vm, 1, parameter_modes)
         push!(vm.stdout, a)
         step!(vm, 2)
         true
-    elseif opcode == 5
+    elseif opcode == JumpIfTrue
         # jump-if-true
         a = read_param(vm, 1, parameter_modes)
         if a != 0
@@ -122,7 +134,7 @@ function tick!(vm::ElfVM)::Bool
             step!(vm, 3)
         end
         true
-    elseif opcode == 6
+    elseif opcode == JumpIfFalse
         # jump-if-false
         a = read_param(vm, 1, parameter_modes)
         if a == 0
@@ -132,7 +144,7 @@ function tick!(vm::ElfVM)::Bool
             step!(vm, 3)
         end
         true
-    elseif opcode == 7
+    elseif opcode == LessThan
         # less than
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -140,7 +152,7 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif opcode == 8
+    elseif opcode == Equals
         # equals
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
@@ -148,9 +160,12 @@ function tick!(vm::ElfVM)::Bool
         write_param!(vm, 3, c)
         step!(vm, 4)
         true
-    elseif opcode == 99
+    elseif opcode == Halt
         false
+    else
+        throw("Opcode $opcode not implemented!")
     end
+
 end
 
 function step!(vm, n)
@@ -352,7 +367,7 @@ function cacheOrbitDepth(om::OrbitMap, object::String)::Int
     end
 end
 
-"""Builds an OrbitMap from a readlines input."""
+    """Builds an OrbitMap from a readlines input."""
 function OrbitMap(lines::Vector{String})::OrbitMap
     orbitMap = OrbitMap(Dict(), Dict("COM" => 0))
     for (inside, outside) in orbitRelationship.(lines)
