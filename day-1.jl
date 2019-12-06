@@ -40,3 +40,8 @@ vm5_b = ElfVM(copy(inputDay5))
 push!(vm5_b.stdin, 5)
 run(vm5_b)
 @assert 3176266 == @show vm5_b.stdout[1]
+
+
+println("\nSolutions for Day 6")
+orbitMap = OrbitMap(readlines(open("input-06")))
+@assert 271151 == @show sum(values(orbitMap.depth))

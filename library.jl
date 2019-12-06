@@ -326,3 +326,41 @@ function check_password_stronger(number)
 
     pairFound
 end
+
+
+################################################################################
+# Orbit Maps ###################################################################
+################################################################################
+
+
+mutable struct OrbitMap
+    centers::Dict{String,String}
+    depth::Dict{String,Int}
+end
+
+"""Takes a string like "XQQ)W94" and outputs the tuple ("XQQ", "W94").
+This indicates, that XQQ (e.g. Sun) is orbited by W94 (e.g. Planet).
+"""
+orbitRelationship(str::String) = (str[1:3], str[5:7])
+
+function cacheOrbitDepth(om::OrbitMap, object::String)::Int
+    if object in keys(om.depth)
+        om.depth[object]
+    else
+        depth = 1 + cacheOrbitDepth(om, om.centers[object])
+        om.depth[object] = depth
+    end
+end
+
+    """Builds an OrbitMap from a readlines input."""
+function OrbitMap(lines::Vector{String})::OrbitMap
+    orbitMap = OrbitMap(Dict(), Dict("COM" => 0))
+    for (inside, outside) in orbitRelationship.(lines)
+        orbitMap.centers[outside] = inside
+    end
+    
+    for (outside, _) in orbitMap.centers
+        cacheOrbitDepth(orbitMap, outside)
+    end
+    orbitMap
+end
