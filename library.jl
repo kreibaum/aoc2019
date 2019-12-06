@@ -352,7 +352,7 @@ function cacheOrbitDepth(om::OrbitMap, object::String)::Int
     end
 end
 
-    """Builds an OrbitMap from a readlines input."""
+"""Builds an OrbitMap from a readlines input."""
 function OrbitMap(lines::Vector{String})::OrbitMap
     orbitMap = OrbitMap(Dict(), Dict("COM" => 0))
     for (inside, outside) in orbitRelationship.(lines)
@@ -363,4 +363,17 @@ function OrbitMap(lines::Vector{String})::OrbitMap
         cacheOrbitDepth(orbitMap, outside)
     end
     orbitMap
+end
+
+"""Determine the distance, using the property that we are on a tree."""
+function distance(om::OrbitMap, a::String, b::String)::Int
+    if a == b
+        0
+    elseif om.depth[a] > om.depth[b]
+        1 + distance(om, om.centers[a], b)
+    elseif om.depth[a] < om.depth[b]
+        1 + distance(om, a, om.centers[b])
+    else
+        2 + distance(om, om.centers[a], om.centers[b])
+    end
 end
