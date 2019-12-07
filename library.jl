@@ -172,14 +172,14 @@ function step!(vm, n)
     vm.instructionPointer += n
 end
 
-function run(vm::ElfVM)
+function run!(vm::ElfVM)
     while tick!(vm) end
 end
 
 function runWithArguments(vm, noun, verb)
     set!(vm, 1, noun)
     set!(vm, 2, verb)
-    run(vm)
+    run!(vm)
     get(vm, 0)
 end
 

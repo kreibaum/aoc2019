@@ -1,4 +1,6 @@
 
+using Combinatorics
+
 include("library.jl")
 
 f = open("input-01-a")
@@ -32,17 +34,38 @@ println("\nSolutions for Day 5")
 inputDay5 = parse.(Int, split(read("input-05", String), ","))
 vm5 = ElfVM(copy(inputDay5))
 push!(vm5.stdin, 1)
-run(vm5)
+run!(vm5)
 @assert [0, 0, 0, 0, 0, 0, 0, 0, 0, 13818007] == @show vm5.stdout
 
 inputDay5 = parse.(Int, split(read("input-05", String), ","))
 vm5_b = ElfVM(copy(inputDay5))
 push!(vm5_b.stdin, 5)
-run(vm5_b)
+run!(vm5_b)
 @assert 3176266 == @show vm5_b.stdout[1]
-
 
 println("\nSolutions for Day 6")
 orbitMap = OrbitMap(readlines(open("input-06")))
 @assert 271151 == @show sum(values(orbitMap.depth))
 @assert 388 == @show distance(orbitMap, orbitMap.centers["YOU"], orbitMap.centers["SAN"])
+
+println("\nSolutions for Day 7")
+# Amplifier Controller Software
+inputDay7 = parse.(Int, split(read("input-07", String), ","))
+
+function amplifier(bytecode::Vector, phase_setting::Int, input::Int)::Int
+    vm = ElfVM(copy(bytecode))
+    push!(vm.stdin, phase_setting)
+    push!(vm.stdin, input)
+    run!(vm)
+    vm.stdout[1]
+end
+
+function amplifier_chain(bytecode::Vector, phase_settings::Vector, input::Int)
+    flow_value = input
+    for phase in phase_settings
+        flow_value = amplifier(bytecode, phase, flow_value)
+    end
+    flow_value
+end
+
+@assert 116680 == @show maximum(amplifier_chain.(Ref(inputDay7), permutations([0, 1, 2, 3, 4]), 0))
