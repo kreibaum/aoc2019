@@ -215,6 +215,78 @@ function findArguments(vm, output)
 end
 
 
+################################################################################
+# Multithreaded Elf Virtual Machine ############################################
+################################################################################
+
+mutable struct MultiThreadElfVM
+    threads::Dict{Int, ElfVM}
+    forwards::Dict{Int, Int}
+end
+
+function MultiThreadElfVM(bytecode::Vector{Int}, pids::Vector{Int}, forwards::Dict{Int, Int})
+    vm = MultiThreadElfVM(Dict(), Dict())
+    for pid in pids
+        vm.threads[pid] = ElfVM(copy(bytecode))
+    end
+    vm.forwards = copy(forwards)
+    vm
+end
+
+# Convenicene functions to work with stdin
+
+function push_stdin!(vm::MultiThreadElfVM, pid, value)
+    push!(vm.threads[pid].stdin, value)
+end
+
+"""A scheduler that runs all the threads."""
+function run!(multi_thread::MultiThreadElfVM)
+    # Right now, I hope that "Round Robin" is going to be good enought.
+    runnable_threads::Vector{Int} = []
+    suspended_threads::Set{Int} = Set()
+    for (pid, thread) in multi_thread.threads
+        if runnable(thread)
+            push!(runnable_threads, pid)
+        else
+            push!(suspended_threads, pid)
+        end
+    end
+
+    while length(runnable_threads) > 0
+        # Pick the next runnable thread in line and do one execution
+        pid = popfirst!(runnable_threads)
+        thread = multi_thread.threads[pid]
+        thread.state = Running
+        # As a possible performance improvement, I could do several ticks
+        # at once. This reduces overhead from context switching.
+        tick!(thread)
+
+        # Decide where this thread goes next
+        if runnable(thread)
+            push!(runnable_threads, pid)
+        else
+            push!(suspended_threads, pid)
+        end
+
+        # Take care of signal forwarding
+        if length(thread.stdout) > 0 && pid in keys(multi_thread.forwards)
+            target_pid = multi_thread.forwards[pid]
+            target_thread = multi_thread.threads[target_pid]
+
+            while length(thread.stdout) > 0
+                push!(target_thread.stdin, popfirst!(thread.stdout))
+            end
+
+            # Check, if this wakes the target thread
+            if runnable(target_thread) && target_pid in suspended_threads
+                delete!(suspended_threads, target_pid)
+                push!(runnable_threads, target_pid)
+            end
+        end
+    end
+end
+
+
 
 ################################################################################
 # Wire pannels #################################################################
