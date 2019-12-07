@@ -27,20 +27,29 @@ end
 # Elf Virtual Machine (Intcode computer) #######################################
 ################################################################################
 
+"""When running many virtual machines in parallel, each machine has an execution
+state. If the vm is waiting for input from another vm, it is set to WaitForInput."""
+@enum VMState begin
+    Initialized = 0
+    Running = 1
+    WaitForInput = 2
+    Halted = 99
+end
 
 mutable struct ElfVM
     memory::Vector{Int}
     instructionPointer::Int
     stdin::Vector{Int}
     stdout::Vector{Int}
+    state::VMState
 end
 
 function ElfVM(memory)
-    ElfVM(memory, 0, [], [])
+    ElfVM(memory, 0, [], [], Initialized)
 end
 
 function Base.copy(vm::ElfVM)::ElfVM
-    ElfVM(copy(vm.memory), vm.instructionPointer, copy(vm.stdin), copy(vm.stdout))
+    ElfVM(copy(vm.memory), vm.instructionPointer, copy(vm.stdin), copy(vm.stdout), vm.state)
 end
 
 @enum Opcode begin
@@ -94,7 +103,8 @@ end
 
 """Executes one instruction on the ElfVM and returns whether it is still active.
 """
-function tick!(vm::ElfVM)::Bool
+function tick!(vm::ElfVM)
+    @assert vm.state == Running "The vm is $(vm.state), you must not call tick!()."
     (opcode, parameter_modes) = parse_instruction(current_instruction(vm))
     if opcode == Addition
         # Addition
@@ -103,7 +113,6 @@ function tick!(vm::ElfVM)::Bool
         c = a + b
         write_param!(vm, 3, c)
         step!(vm, 4)
-        true
     elseif opcode == Multiplication
         # Multiplication
         a = read_param(vm, 1, parameter_modes)
@@ -111,19 +120,20 @@ function tick!(vm::ElfVM)::Bool
         c = a * b
         write_param!(vm, 3, c)
         step!(vm, 4)
-        true
     elseif opcode == ReadStdin
-        # Read from stdin
-        a = popfirst!(vm.stdin)
-        write_param!(vm, 1, a)
-        step!(vm, 2)
-        true
+        # If there is no input on stdin, the vm suspends.
+        if length(vm.stdin) > 0
+            a = popfirst!(vm.stdin)
+            write_param!(vm, 1, a)
+            step!(vm, 2)
+        else
+            vm.state = WaitForInput
+        end
     elseif opcode == WriteStdout
         # Write to stdout
         a = read_param(vm, 1, parameter_modes)
         push!(vm.stdout, a)
         step!(vm, 2)
-        true
     elseif opcode == JumpIfTrue
         # jump-if-true
         a = read_param(vm, 1, parameter_modes)
@@ -133,7 +143,6 @@ function tick!(vm::ElfVM)::Bool
         else
             step!(vm, 3)
         end
-        true
     elseif opcode == JumpIfFalse
         # jump-if-false
         a = read_param(vm, 1, parameter_modes)
@@ -143,7 +152,6 @@ function tick!(vm::ElfVM)::Bool
         else
             step!(vm, 3)
         end
-        true
     elseif opcode == LessThan
         # less than
         a = read_param(vm, 1, parameter_modes)
@@ -151,7 +159,6 @@ function tick!(vm::ElfVM)::Bool
         c = a < b ? 1 : 0
         write_param!(vm, 3, c)
         step!(vm, 4)
-        true
     elseif opcode == Equals
         # equals
         a = read_param(vm, 1, parameter_modes)
@@ -159,21 +166,37 @@ function tick!(vm::ElfVM)::Bool
         c = a == b ? 1 : 0
         write_param!(vm, 3, c)
         step!(vm, 4)
-        true
     elseif opcode == Halt
-        false
+        vm.state = Halted
     else
         throw("Opcode $opcode not implemented!")
     end
-
 end
 
 function step!(vm, n)
     vm.instructionPointer += n
 end
 
-function run!(vm::ElfVM)
-    while tick!(vm) end
+function runnable(vm::ElfVM)::Bool
+    if vm.state == Initialized
+        true
+    elseif vm.state == Running
+        true
+    elseif vm.state == WaitForInput
+        length(vm.stdin) > 0
+    elseif vm.state == Halted
+        false
+    else
+        throw("VM state $(vm.state) not recognized.")
+    end
+end
+
+function run!(vm::ElfVM)::VMState
+    vm.state = Running
+    while vm.state == Running
+        tick!(vm)
+    end
+    vm.state
 end
 
 function runWithArguments(vm, noun, verb)
@@ -258,8 +281,8 @@ function createWires(directions)
     wires
     end
 
-intersect(w1::HorizontalWire, w2::HorizontalWire) = Nothing
-intersect(w1::VerticalWire, w2::VerticalWire) = Nothing
+intersect(w1::HorizontalWire, w2::HorizontalWire) = Nothing()
+intersect(w1::VerticalWire, w2::VerticalWire) = Nothing()
 intersect(w1::VerticalWire, w2::HorizontalWire) = intersect(w2, w1)
 function intersect(w1::HorizontalWire, w2::VerticalWire)
     if w1.x1 < w2.x < w1.x2 || w1.x1 > w2.x > w1.x2
@@ -270,14 +293,14 @@ function intersect(w1::HorizontalWire, w2::VerticalWire)
             return (w2.x, w1.y, signalTime)
         end
     end
-    Nothing
+    Nothing()
 end
 
 function intersections(wires1, wires2)
     result = []
     for w1 in wires1, w2 in wires2
         intersection = intersect(w1, w2)
-        if intersection != Nothing
+        if intersection != Nothing()
             push!(result, intersection)
         end
     end
