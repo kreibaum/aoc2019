@@ -87,3 +87,27 @@ function day7_vm2_runner(config::Vector)::Int
 end
 
 @assert 89603079 == @show maximum(day7_vm2_runner.(permutations([5, 6, 7, 9, 8])))
+
+println("\nSolutions for Day 8")
+
+# Read data, remove terminating newline, convert to Vector{Int}
+input_8 = parse.(Int, collect(read("input-08", String)[1:end-1]))
+# Convert to a Matrix{Int, 3}. Note that the julia REPL outputs x and y flipped.
+image_depth = length(input_8) ÷ 25 ÷ 6
+image_data = reshape(input_8, (25, 6, image_depth ))
+
+# [..] the Elves would like you to find the layer that contains the fewest 0 digits.
+layer_digit_count(data, layer, digit) = length(filter(x -> x == digit, data[:,:,layer]))
+zeros = layer_digit_count.(Ref(image_data), 1:image_depth, 0)
+layer_with_least_zeros = findall(zeros .== minimum(zeros))[1]
+
+# On that layer, what is the number of 1 digits multiplied by the number of 2 digits?
+@assert 1820 == @show layer_digit_count(image_data, layer_with_least_zeros, 1) * layer_digit_count(image_data, layer_with_least_zeros, 2)
+
+# What message is produced after decoding your image?
+pixel_color(data, x, y)::Int = filter(c -> c != 2, data[x, y, :])[1]
+image_decoded = pixel_color.(Ref(image_data), transpose(1:25), 1:6)
+# Solution read manually from image output: ZUKCJ
+
+
+println("\nSolutions for Day 9")
