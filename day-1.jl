@@ -128,3 +128,52 @@ boost_vm = ElfVM(copy(boost_code))
 push!(boost_vm.stdin, 2)
 run!(boost_vm)
 @assert 86025 == @show boost_vm.stdout[1]
+
+
+println("\nSolutions for Day 10")
+
+file_10 = filter(c -> c == '#' || c == '.', read("input-10", String))
+vec_10 = map(c -> c .== '#', collect(file_10))
+# The asteroid field is square
+side_length = Int(sqrt(length(vec_10)))
+asteroid_field = reshape(vec_10, (side_length, side_length))
+
+function free_view(field, ax, ay, bx, by)::Bool
+    steps = gcd(bx-ax, by-ay)
+    # We don't count the asteroid itself, only other asteroids.
+    # This also prevents us from dividing by zero.
+    if steps == 0 return false end
+    dx = (bx-ax) ÷ steps
+    dy = (by-ay) ÷ steps
+    for i in 1:(steps - 1)
+        # Check if the possible location has an asteroid.
+        if field[ax + i * dx, ay + i * dy]
+            return false
+        end
+    end
+    true
+end
+
+function count_visible_asteroids(field, cx, cy)::Int
+    counter = 0
+    for x in 1:side_length, y in 1:side_length
+        if field[x, y] && free_view(field, cx, cy, x, y)
+            counter += 1
+        end
+    end
+    counter
+end
+
+# Test how many asteroids you can see from this position
+function day_10()
+    max_count = 0
+    for x in 1:side_length, y in 1:side_length
+        if asteroid_field[x, y]
+            new_count = count_visible_asteroids(asteroid_field, x, y)
+            max_count = max(max_count, new_count)
+        end
+    end
+    max_count
+end
+
+@assert 267 == @show day_10()
