@@ -164,16 +164,46 @@ function count_visible_asteroids(field, cx, cy)::Int
     counter
 end
 
+function get_visible_asteroids(field, cx, cy)::Vector
+    asteroid_list = []
+    for x in 1:side_length, y in 1:side_length
+        if field[x, y] && free_view(field, cx, cy, x, y)
+            push!(asteroid_list, (x, y))
+        end
+    end
+    asteroid_list
+end
+
 # Test how many asteroids you can see from this position
 function day_10()
     max_count = 0
+    best = (0, 0)
     for x in 1:side_length, y in 1:side_length
         if asteroid_field[x, y]
             new_count = count_visible_asteroids(asteroid_field, x, y)
-            max_count = max(max_count, new_count)
+            if new_count > max_count
+                max_count = new_count
+                best = (x, y)
+            end
         end
     end
-    max_count
+    (max_count, best)
 end
 
-@assert 267 == @show day_10()
+choosen_asteroid = day_10()
+
+@assert 267 == @show choosen_asteroid[1]
+
+# Part 2 of day 10, now we need to determine the order in which the asteroids
+# are vaporized.
+
+# I am able to see 267 asteroids, this means I only have to order those.
+# I won't even get to a second rotation.
+
+visible_asteroids = get_visible_asteroids(asteroid_field, choosen_asteroid[2]...)
+
+sweep_angle((x, y)) = atan(-((x)+0.000001), y)
+sweep_angle_from_laser((x, y)) = sweep_angle((x - choosen_asteroid[2][1], y - choosen_asteroid[2][2]))
+
+sorted_asteroids = sort(visible_asteroids, by=sweep_angle_from_laser)
+@assert (14, 10) == @show sorted_asteroids[200]
