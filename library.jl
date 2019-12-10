@@ -38,18 +38,20 @@ end
 
 mutable struct ElfVM
     memory::Vector{Int}
+    extraMemory::Dict{Int, Int}
     instructionPointer::Int
+    relativePointer::Int
     stdin::Vector{Int}
     stdout::Vector{Int}
     state::VMState
 end
 
 function ElfVM(memory)
-    ElfVM(memory, 0, [], [], Initialized)
+    ElfVM(memory, Dict(), 0, 0, [], [], Initialized)
 end
 
 function Base.copy(vm::ElfVM)::ElfVM
-    ElfVM(copy(vm.memory), vm.instructionPointer, copy(vm.stdin), copy(vm.stdout), vm.state)
+    ElfVM(copy(vm.memory), copy(vm.extraMemory), vm.instructionPointer, vm.relativePointer, copy(vm.stdin), copy(vm.stdout), vm.state)
 end
 
 @enum Opcode begin
@@ -61,14 +63,29 @@ end
     JumpIfFalse = 6
     LessThan = 7
     Equals = 8
+    ShiftRelativeBase = 9
     Halt = 99
 end
 
 function set!(vm::ElfVM, i, v)
-    vm.memory[i + 1] = v
+    if length(vm.memory) >= i + 1
+        vm.memory[i + 1] = v
+    else
+        vm.extraMemory[i + 1] = v
+    end
 end
 
-get(vm::ElfVM, i) = vm.memory[i + 1]
+function get(vm::ElfVM, i)
+    if length(vm.memory) >= i + 1
+        vm.memory[i + 1]
+    else
+        if i + 1 in keys(vm.extraMemory)
+            vm.extraMemory[i + 1]
+        else
+            vm.extraMemory[i + 1] = 0
+        end
+    end
+end
 
 current_instruction(vm) = get(vm, vm.instructionPointer)
 
@@ -80,10 +97,10 @@ params3(vm) = (get(vm, vm.instructionPointer + 1),
 parse_instruction(with_parameter_modes::Int) = (Opcode(with_parameter_modes % 100), digits(with_parameter_modes ÷ 100))
 
 """Reads a parameter of the instruction, given a relative offset.
-Can differentiate between different read modes. (position/immediate)
+Can differentiate between different read modes. (position/immediate/..)
 Missing read modes are assumed to be position mode."""
 function read_param(vm::ElfVM, i::Int, parameter_modes::Vector{Int})::Int
-    mode = i <= length(parameter_modes) ? parameter_modes[i] : 0 
+    mode = i <= length(parameter_modes) ? parameter_modes[i] : 0
     value = get(vm, vm.instructionPointer + i)
     if mode == 0
         # position mode
@@ -91,13 +108,23 @@ function read_param(vm::ElfVM, i::Int, parameter_modes::Vector{Int})::Int
     elseif mode == 1
         # immediate mode
         return value
+    elseif mode == 2
+        # relative mode
+        return get(vm, vm.relativePointer + value)
     end
-    end
+
+end
 
 """Writes the value to the register given as the i-th parameter of
 the current operation."""
-function write_param!(vm::ElfVM, i::Int, value)
-    target = get(vm, vm.instructionPointer + i)
+function write_param!(vm::ElfVM, i::Int, value, parameter_modes::Vector{Int})
+    mode = i <= length(parameter_modes) ? parameter_modes[i] : 0
+    parameter = get(vm, vm.instructionPointer + i)
+    if mode == 0
+        target = parameter
+    elseif mode == 2
+        target = vm.relativePointer + parameter
+    end
     set!(vm, target, value)
 end
 
@@ -111,20 +138,20 @@ function tick!(vm::ElfVM)
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
         c = a + b
-        write_param!(vm, 3, c)
+        write_param!(vm, 3, c, parameter_modes)
         step!(vm, 4)
     elseif opcode == Multiplication
         # Multiplication
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
         c = a * b
-        write_param!(vm, 3, c)
+        write_param!(vm, 3, c, parameter_modes)
         step!(vm, 4)
     elseif opcode == ReadStdin
         # If there is no input on stdin, the vm suspends.
         if length(vm.stdin) > 0
             a = popfirst!(vm.stdin)
-            write_param!(vm, 1, a)
+            write_param!(vm, 1, a, parameter_modes)
             step!(vm, 2)
         else
             vm.state = WaitForInput
@@ -157,15 +184,20 @@ function tick!(vm::ElfVM)
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
         c = a < b ? 1 : 0
-        write_param!(vm, 3, c)
+        write_param!(vm, 3, c, parameter_modes)
         step!(vm, 4)
     elseif opcode == Equals
         # equals
         a = read_param(vm, 1, parameter_modes)
         b = read_param(vm, 2, parameter_modes)
         c = a == b ? 1 : 0
-        write_param!(vm, 3, c)
+        write_param!(vm, 3, c, parameter_modes)
         step!(vm, 4)
+    elseif opcode == ShiftRelativeBase
+        # Opcode 9 adjusts the relative base by the value of its only parameter.
+        a = read_param(vm, 1, parameter_modes)
+        vm.relativePointer += a
+        step!(vm, 2)
     elseif opcode == Halt
         vm.state = Halted
     else

@@ -111,3 +111,20 @@ image_decoded = pixel_color.(Ref(image_data), transpose(1:25), 1:6)
 
 
 println("\nSolutions for Day 9")
+
+cpy_code = [109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99]
+cpy_vm = ElfVM(copy(cpy_code))
+run!(cpy_vm)
+@assert cpy_code == cpy_vm.stdout
+
+# Load the boost programm into a vm
+boost_code = parse.(Int, split(read("input-09", String), ","))
+boost_vm = ElfVM(copy(boost_code))
+push!(boost_vm.stdin, 1)
+run!(boost_vm)
+@assert 3638931938 == @show boost_vm.stdout[1]
+
+boost_vm = ElfVM(copy(boost_code))
+push!(boost_vm.stdin, 2)
+run!(boost_vm)
+@assert 86025 == @show boost_vm.stdout[1]
